@@ -1,0 +1,181 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: [
+    "AWS::Serverless-2016-10-31",
+    AddCloudWatchAlarms
+]
+Description: "Boilerplate template"
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W2
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      # this is due nodejs not recognising prod as valid NODE_ENV
+      - prod
+      - stag
+      - dev
+    ConstraintDescription: invalid environment, only [prod, stag, dev] are allowed
+
+  MacroParamStage:
+    Type: String
+
+  MacroParamTopicArn:
+    Type: String
+    Description: The ARN of the SNS topic to use in the alarms.
+
+  Appname:
+    Type: String
+
+  UserPoolArn:
+    Type: String
+
+  SlackWebhookUrl:
+    Type: AWS::SSM::Parameter::Value<String>
+
+Conditions:
+  IsProduction: !Equals [ !Ref Environment, prod ]
+
+Globals:
+  Api:
+    TracingEnabled: !If [IsProduction, true, false]
+  Function:
+    Runtime: go1.x
+    Timeout: 30
+    Tracing: !If [IsProduction, Active, PassThrough]
+    MemorySize: 128
+    Tags:
+      app: !Ref Appname
+      env: !Ref Environment
+      type: compute
+      description: Lambda functions
+    Environment:
+      Variables:
+        GO_ENV: !Ref Environment
+        SLACK_WEBHOOK_URL: !Ref SlackWebhookUrl
+        USER_POOL_ARN: !Ref UserPoolArn
+
+Resources:
+  #API GATEWAY ========================================
+  API:
+    Type: AWS::Serverless::Api
+    Properties:
+      MethodSettings:
+        - LoggingLevel: INFO # ERROR/INFO level logging
+          ResourcePath: '/*' # allows for logging on any resource
+          HttpMethod: '*' # allows for logging on any method
+          DataTraceEnabled: !If [IsProduction, true, false] # enabling Log full requests/responses data in console
+          MetricsEnabled: !If [IsProduction, true, false]
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref UserPoolArn
+        AddDefaultAuthorizerToCorsPreflight: false
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+      StageName: !Ref Environment
+      DefinitionBody:
+        swagger: "2.0"
+        info:
+          title:
+            Ref: AWS::StackName
+        paths:
+          /example:
+            post:
+              responses: {}
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ExampleFuncion.Arn}/invocations
+                httpMethod: "POST"
+                type: "aws_proxy"
+
+
+  # FUNCTIONS ==========================================
+  ExampleFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./functions/example
+      Handler: main
+      Policies:
+        - AWSLambdaBasicExecutionRole
+      Events:
+        HTTP:
+          Type: Api
+          Properties:
+            Path: /example
+            RestApiId: !Ref API
+            Method: Post
+
+  # LOGS ==========================================
+
+  ExampleFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+      LogGroupName: !Join ["", ["/aws/lambda/", !Ref ExampleFunction]]
+
+
+  # Parameters =============================
+
+  ExampleFunctionArn:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub ${Appname}-${Environment}-ExampleFunction-arn
+      Tags:
+        app: !Ref Appname
+        env: !Ref Environment
+        type: parameter
+        description: ExampleFunction Arn
+      Type: String
+      Value: !GetAtt ExampleFunction.Arn
+
+  # Events =================================
+
+  AlarmsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - Key: app
+          Value: !Ref Appname
+        - Key: env
+          Value: !Ref Environment
+        - Key: type
+          Value: event
+        - Key: description
+          Value: Alarms topic
+
+
+  # Monitoring and Alarms (Only for production) ==========================
+
+  RegionalLambdaConcurrency:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref AlarmsTopic
+      AlarmDescription: Regional concurrency breach
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: ConcurrentExecutions
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 800
+      TreatMissingData: missing
+
+  SARCloudwatchAlarmsLayer:
+    Type: AWS::Serverless::Application
+    Condition: IsProduction
+    Properties:
+      Location:
+        ApplicationId: arn:aws:serverlessrepo:us-east-1:374852340823:applications/cloudwatch-alarms-macro
+        SemanticVersion: 1.0.3
+      Parameters:
+        DefaultConfigParamName: !Sub ${Appname}-${Environment}-SARCloudwatch-config

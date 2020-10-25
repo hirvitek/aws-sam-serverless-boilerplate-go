@@ -1,0 +1,4 @@
+output.yaml
+.aws-sam
+vendor
+.idea
