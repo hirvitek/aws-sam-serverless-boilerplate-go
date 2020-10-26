@@ -7,6 +7,7 @@ import (
 type AppError interface {
 	Error() string
 	GetStatusCode() int
+	GetType() string
 }
 
 type appError struct {
@@ -39,4 +40,8 @@ func (a appError) Error() string {
 
 func (a appError) GetStatusCode() int {
 	return a.StatusCode
+}
+
+func (a appError) GetType() string {
+	return a.ErrType
 }

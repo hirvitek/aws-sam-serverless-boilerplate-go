@@ -1,0 +1,7 @@
+{
+  "Template": {
+    "TemplateName": "StandardCommunication",
+    "SubjectPart": "{{subject}}",
+    "HtmlPart": "<p>Hello {{name}}, </p> <p> {{message}}. </p>",
+  }
+}

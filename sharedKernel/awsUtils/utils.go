@@ -81,30 +81,17 @@ func APISuccessResponse(message string, data interface{}) (events.APIGatewayProx
 	}, nil
 }
 
-
-// Monkey patch to avoid import cycles in go
-type errorPort interface {
-	Error() string
-	GetStatusCode() int
-}
-
-func APIFailureResponse(err error) (events.APIGatewayProxyResponse, error) {
-	msg := err.Error()
-	e := err.(appError.AppError)
-	if e.GetStatusCode() == 500 {
-		msg = "sorry something went wrong"
-	}
-	
+func APIFailureResponse(err appError.AppError) (events.APIGatewayProxyResponse, error) {
 	r := response{
-		Message: msg,
+		Message: err.Error(),
 	}
-	marshal, err := json.Marshal(r)
-	if err != nil {
+	marshal, err1 := json.Marshal(r)
+	if err1 != nil {
 		return events.APIGatewayProxyResponse{}, err
 	}
 	
 	return events.APIGatewayProxyResponse{
-		StatusCode: e.GetStatusCode(),
+		StatusCode: err.GetStatusCode(),
 		Body:       string(marshal),
 		Headers: map[string]string{
 			"Access-Control-Allow-Origin":      "*",
