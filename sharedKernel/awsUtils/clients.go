@@ -50,7 +50,6 @@ func NewDynamoDB() *dynamodb.DynamoDB {
 
 func NewSNS() *sns.SNS {
 	newSession := getDefaultSession()
-	
 	snsClient := sns.New(newSession)
 	xray.AWS(snsClient.Client)
 	return snsClient

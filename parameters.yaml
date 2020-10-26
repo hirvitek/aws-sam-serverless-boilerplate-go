@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: "AWS::Serverless-2016-10-31"
+Description: "Boilerplate template"
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues:
+      # this is due nodejs not recognising prod as valid NODE_ENV
+      - prod
+      - stag
+      - dev
+    ConstraintDescription: invalid environment, only [prod, stag, dev] are allowed
+
+  Appname:
+    Type: String
+
+Conditions:
+  IsProduction: !Equals [ !Ref Environment, prod ]
+  IsDevelopment: !Equals [ !Ref Environment, dev ]
+
+Resources:
+
+  #============================ DEV ==================================
+
+  AppConfigDev:
+    Type: AWS::SSM::Parameter
+    Condition: IsDevelopment
+    Properties:
+      Name: !Sub ${Appname}-${Environment}-app-config
+      Tags:
+        app: !Ref Appname
+        env: !Ref Environment
+        type: parameter
+        description: Application configuration
+      Type: String
+      Value: '{}'
+
+
+
+  #============================ PROD ==================================
+
+  AppConfigProd:
+    Type: AWS::SSM::Parameter
+    Condition: IsProduction
+    Properties:
+      Name: !Sub ${Appname}-${Environment}-app-config
+      Tags:
+        app: !Ref Appname
+        env: !Ref Environment
+        type: parameter
+        description: Application configuration
+      Type: String
+      Value: '{}'
+
