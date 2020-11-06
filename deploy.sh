@@ -5,12 +5,14 @@
 #  dev:   ./deploy.sh
 #  prod:  ./deploy.sh production
 #  stag:  ./deploy.sh staging
-ENV=${1:-dev}
-APPNAME=""
+export ENV=${1:-dev}
+export APPNAME=""
 PROJECT=${APPNAME}-${ENV}
 BUCKET=${PROJECT}-lambda-deployment-artifacts
 PROFILE=default
 REGION=ap-southeast-1
+
+"${HOME}"/.local/bin/cfn-lint template.yaml || exit 1
 
 sam build
 
@@ -21,6 +23,9 @@ sam package --profile "${PROFILE}" --region "${REGION}"  \
   --output-template-file output.yaml \
   --s3-bucket "${BUCKET}"
 
+# Source env variables for the template
+. env."${ENV}".sh
+
 ## the actual deployment step
 sam deploy --profile "${PROFILE}" --region "${REGION}" \
   --template-file output.yaml \
@@ -28,4 +33,5 @@ sam deploy --profile "${PROFILE}" --region "${REGION}" \
   --capabilities CAPABILITY_IAM \
   --parameter-overrides \
   Environment="${ENV}" \
-  Appname="${APPNAME}"
+  Appname="${APPNAME}" \
+  SlackWebhookUrl="${SLACK_WEBHOOK_URL}"

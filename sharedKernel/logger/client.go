@@ -18,7 +18,7 @@ type logStructure struct {
 }
 
 type Port interface {
-	Info(name string, message string)
+	Info(name string, message interface{})
 	Failure(err error, params ...string)
 	SetMetadata(meta map[string]string)
 }
